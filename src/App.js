@@ -45,14 +45,6 @@ export default function VideoPlayer() {
 }
 
 const VideoFrameDisplay = ({ frame, canvasRef, decoderRef, videoInfo, setVideoInfo, error, setError, debug, setDebug }) => {
-
-  const handleFrame = (frame) => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
-    frame.close();
-  };
-
   const addDebug = (message) => {
     setDebug(prev => prev + '\n' + message);
   };
@@ -127,7 +119,6 @@ const VideoFrameDisplay = ({ frame, canvasRef, decoderRef, videoInfo, setVideoIn
         }
 
         addDebug(`Codec config: ${JSON.stringify(codecConfig)}`);
-
         const videoDecoder = new VideoDecoder({
           output: handleFrame,
           error: (e) => {
@@ -136,17 +127,11 @@ const VideoFrameDisplay = ({ frame, canvasRef, decoderRef, videoInfo, setVideoIn
           },
         });
 
-        await videoDecoder.configure(codecConfig);
+        videoDecoder.configure(codecConfig);
         decoderRef.current = videoDecoder;
 
         addDebug('Decoder initialized');
-
-        // Process any pending samples
-        for (const sample of pendingSamples) {
-          await decodeFrame(sample);
-        }
-        pendingSamples = [];
-
+        
         mp4boxFile.setExtractionOptions(videoTrackInfo.id, null, { nbSamples: 1 });
         mp4boxFile.start();
       } catch (err) {
@@ -155,7 +140,7 @@ const VideoFrameDisplay = ({ frame, canvasRef, decoderRef, videoInfo, setVideoIn
       }
     };
 
-    const fetchAndProcessVideo = async () => {
+    const fetchAndProcessVideoFrame = async (frame) => {
       try {
         const response = await fetch(url);
         const reader = response.body.getReader();
@@ -235,7 +220,7 @@ const VideoFrameDisplay = ({ frame, canvasRef, decoderRef, videoInfo, setVideoIn
       }
     };
 
-    fetchAndProcessVideo().catch(e => {
+    fetchAndProcessVideoFrame(frame).catch(e => {
       addDebug(`Error initializing video: ${e.message}`);
       setError(`Error initializing video: ${e.message}`);
     });
@@ -245,7 +230,7 @@ const VideoFrameDisplay = ({ frame, canvasRef, decoderRef, videoInfo, setVideoIn
         decoderRef.current.close();
       }
     };
-  }, [url, frame]);
+  }, [frame]);
 
   return (
     <div className="w-full max-w-xl mx-auto p-4">
