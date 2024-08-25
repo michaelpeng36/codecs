@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { createFile } from 'mp4box';
-import url from './assets/render-136381179-1724250411493.mp4'
+import url from './assets/channel-1-display-0 3.mp4';
 
 export default function VideoPlayer() {
+  const displayCounter = useRef(0);
+  const frameRef = useRef(null);
+  const closedFrameRef = useRef(true);
   const canvasRef = useRef(null);
   const decoderRef = useRef(null);
   const [error, setError] = useState(null);
@@ -25,8 +28,11 @@ export default function VideoPlayer() {
       <div className="display">
         <VideoFrameDisplay
           frame={frame}
+          frameRef={frameRef}
+          closedFrameRef={closedFrameRef}
           canvasRef={canvasRef}
           decoderRef={decoderRef}
+          displayCounter={displayCounter}
           videoInfo={videoInfo}
           setVideoInfo={setVideoInfo}
           error={error}
@@ -39,13 +45,13 @@ export default function VideoPlayer() {
         />
       </div>
       <div className="control">
-        <ControlBar frame={frame} setFrame={setFrame} onForwardClick={handleVideoForward} onBackWardClick={handleVideoBackward} />
+        <ControlBar frame={frame} setFrame={setFrame} onForwardClick={handleVideoForward} onBackwardClick={handleVideoBackward} debug={debug} />
       </div>
     </>
   );
 }
 
-const VideoFrameDisplay = ({ frame, canvasRef, decoderRef, videoInfo, setVideoInfo, error, setError, debug, setDebug, mp4boxFileRef, samplesRef, keyFramesRef }) => {
+const VideoFrameDisplay = ({ frame, frameRef, closedFrameRef, canvasRef, decoderRef,displayCounter, videoInfo, setVideoInfo, error, setError, setDebug, mp4boxFileRef, samplesRef, keyFramesRef }) => {
   const addDebug = (message) => {
     setDebug(prev => prev + '\n' + message);
   };
@@ -170,6 +176,7 @@ const VideoFrameDisplay = ({ frame, canvasRef, decoderRef, videoInfo, setVideoIn
           arrayBuffer.fileStart = filePosition;
 
           mp4boxFile.appendBuffer(arrayBuffer);
+          // addDebug("Adding chunk to mp4box");
 
           filePosition += chunk.length;
           await reader.read().then(processChunk);
@@ -213,45 +220,64 @@ const VideoFrameDisplay = ({ frame, canvasRef, decoderRef, videoInfo, setVideoIn
 
         await decoderRef.current.decode(chunk);
       }
+      await decoderRef.current.flush();
+      displayFrameRef();
     };
 
     decodeFrame();
   }, [frame]);
 
   const handleFrame = (decodedFrame) => {
+    // Close the previous frame if it exists
+    if (!closedFrameRef.current) {
+      frameRef.current.close();
+      closedFrameRef.current = true;
+    }
+    frameRef.current = decodedFrame;
+    // addDebug(`frameRef.current is of type ${typeof(decodedFrame)}`);
+    closedFrameRef.current = false;
+  };
+
+  const displayFrameRef = () => {
     const canvas = canvasRef.current;
+    displayCounter.current += 1;
+    addDebug(`Displaying frame ${displayCounter.current}`);
     if (canvas) {
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(decodedFrame, 0, 0, canvas.width, canvas.height);
-      decodedFrame.close();
+      ctx.drawImage(frameRef.current, 0, 0, canvas.width, canvas.height);
+      if (!closedFrameRef) {
+        frameRef.current.close();
+        closedFrameRef.current = true;
+      }
     }
-  };
+  }
 
   return (
     <div className="w-full max-w-xl mx-auto p-4">
       <h2 className="text-xl font-bold mb-4">Video Frame Display</h2>
       {error ? (
         <p className="text-red-500">{error}</p>
-      ) : (
-        <canvas ref={canvasRef} width="640" height="480" className="border border-gray-300" />
-      )}
+      ) : (videoInfo ? (
+        <canvas ref={canvasRef} width={videoInfo.tracks[0].video.width} height={videoInfo.tracks[0].video.height} className="border border-gray-300" />
+        // Should never reach the below line
+      ) : null)}
       {videoInfo && (
         <p className="mt-2">
           Video info: {videoInfo.tracks[0].video.width}x{videoInfo.tracks[0].video.height}, 
           Codec: {videoInfo.tracks[0].codec}
         </p>
       )}
-      <pre className="mt-4 p-2 bg-gray-100 rounded overflow-auto max-h-40">{debug}</pre>
     </div>
   );
 };
 
-function ControlBar({ frame, onForwardClick, onBackWardClick }) {
+function ControlBar({ frame, onForwardClick, onBackwardClick, debug  }) {
   return (
     <div className="control">
-      <button className="backward" onClick={onBackWardClick}>Previous frame</button>
+      <button className="backward" onClick={onBackwardClick}>Previous frame</button>
       <label>Current frame: {frame}</label>
       <button className="forward" onClick={onForwardClick}>Next frame</button>
+      <pre className="mt-4 p-2 bg-gray-100 rounded overflow-auto max-h-40">{debug}</pre>
     </div>
   );
 }
