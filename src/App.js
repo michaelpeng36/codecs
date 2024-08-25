@@ -9,141 +9,131 @@ export default function VideoPlayer() {
   const [frame, setFrame] = useState(0);
   const [debug, setDebug] = useState('');
   const [videoInfo, setVideoInfo] = useState(null);
+  const mp4boxFileRef = useRef(null);
+  const samplesRef = useRef([]);
+  const keyFramesRef = useRef([]);
 
   function handleVideoForward() {
     setFrame(frame => frame + 1);
   }
   function handleVideoBackward() {
-    setFrame(frame => {
-      if (frame > 0) {
-        return frame - 1
-      }
-      return frame
-    });
+    setFrame(frame => Math.max(0, frame - 1));
   }
 
   return (
     <>
       <div className="display">
         <VideoFrameDisplay
-          frame={ frame }
-          canvasRef={ canvasRef }
-          decoderRef = { decoderRef }
-          videoInfo = { videoInfo }
-          setVideoInfo={ setVideoInfo }
-          error={ error }
-          setError={ setError }
-          debug={ debug }
-          setDebug={ setDebug }/>
+          frame={frame}
+          canvasRef={canvasRef}
+          decoderRef={decoderRef}
+          videoInfo={videoInfo}
+          setVideoInfo={setVideoInfo}
+          error={error}
+          setError={setError}
+          debug={debug}
+          setDebug={setDebug}
+          mp4boxFileRef={mp4boxFileRef}
+          samplesRef={samplesRef}
+          keyFramesRef={keyFramesRef}
+        />
       </div>
       <div className="control">
-        <ControlBar frame={ frame } setFrame={ setFrame } onForwardClick={ () => handleVideoForward() } onBackWardClick={ () => handleVideoBackward() }/>
+        <ControlBar frame={frame} setFrame={setFrame} onForwardClick={handleVideoForward} onBackWardClick={handleVideoBackward} />
       </div>
-      
     </>
   );
 }
 
-const VideoFrameDisplay = ({ frame, canvasRef, decoderRef, videoInfo, setVideoInfo, error, setError, debug, setDebug }) => {
+const VideoFrameDisplay = ({ frame, canvasRef, decoderRef, videoInfo, setVideoInfo, error, setError, debug, setDebug, mp4boxFileRef, samplesRef, keyFramesRef }) => {
   const addDebug = (message) => {
     setDebug(prev => prev + '\n' + message);
   };
 
   useEffect(() => {
-    const mp4boxFile = createFile();
-    let filePosition = 0;
-    let pendingSamples = [];
-
-    const findAvcC = (trak) => {
-      if (trak.mdia?.minf?.stbl?.stsd) {
-        const stsd = trak.mdia.minf.stbl.stsd;
-        for (let i = 0; i < stsd.entries.length; i++) {
-          const entry = stsd.entries[i];
-          if (entry.avcC) {
-            return entry.avcC;
-          }
-        }
-      }
-      return null;
-    };
-
-    const initializeDecoder = async (info) => {
+    const initializeVideo = async () => {
       try {
-        const videoTrackInfo = info.tracks.find(track => track.type === 'video');
-        if (!videoTrackInfo) {
-          throw new Error('No video track found in the file.');
-        }
+        const mp4boxFile = createFile();
+        mp4boxFileRef.current = mp4boxFile;
+        let filePosition = 0;
 
-        addDebug(`Video codec: ${videoTrackInfo.codec}`);
-
-        let avcC = null;
-        if (videoTrackInfo.codec.startsWith('avc1')) {
-          for (let i = 0; i < mp4boxFile.moov.traks.length; i++) {
-            avcC = findAvcC(mp4boxFile.moov.traks[i]);
-            if (avcC) break;
+        const findAvcC = (trak) => {
+          if (trak.mdia?.minf?.stbl?.stsd) {
+            const stsd = trak.mdia.minf.stbl.stsd;
+            for (let i = 0; i < stsd.entries.length; i++) {
+              const entry = stsd.entries[i];
+              if (entry.avcC) {
+                return entry.avcC;
+              }
+            }
           }
-          if (!avcC) {
-            addDebug('AVC configuration not found in expected location');
-            throw new Error('AVC configuration not found');
+          return null;
+        };
+
+        const initializeDecoder = async (info) => {
+          const videoTrackInfo = info.tracks.find(track => track.type === 'video');
+          if (!videoTrackInfo) {
+            throw new Error('No video track found in the file.');
           }
-        }
 
-        addDebug(`AVC configuration found: ${avcC ? 'Yes' : 'No'}`);
-        addDebug(`AVC configuration structure: ${JSON.stringify(avcC)}`);
+          addDebug(`Video codec: ${videoTrackInfo.codec}`);
 
-        let codecConfig;
-        if (videoTrackInfo.codec.startsWith('avc1')) {
-          if (!avcC.SPS || !avcC.SPS[0] || !avcC.PPS || !avcC.PPS[0]) {
-            throw new Error('Invalid AVC configuration structure');
+          let avcC = null;
+          if (videoTrackInfo.codec.startsWith('avc1')) {
+            for (let i = 0; i < mp4boxFile.moov.traks.length; i++) {
+              avcC = findAvcC(mp4boxFile.moov.traks[i]);
+              if (avcC) break;
+            }
+            if (!avcC) {
+              addDebug('AVC configuration not found in expected location');
+              throw new Error('AVC configuration not found');
+            }
           }
-          const sps = new Uint8Array(Object.values(avcC.SPS[0].nalu));
-          const pps = new Uint8Array(Object.values(avcC.PPS[0].nalu));
-          const avccBox = new Uint8Array([
-            0x01, avcC.AVCProfileIndication, avcC.profile_compatibility, avcC.AVCLevelIndication,
-            0xff, 0xe1, (sps.length >> 8) & 0xff, sps.length & 0xff,
-            ...sps, 0x01, (pps.length >> 8) & 0xff, pps.length & 0xff, ...pps
-          ]);
 
-          codecConfig = {
-            codec: videoTrackInfo.codec,
-            codedWidth: videoTrackInfo.video.width,
-            codedHeight: videoTrackInfo.video.height,
-            description: avccBox
-          };
-        } else {
-          codecConfig = {
-            codec: videoTrackInfo.codec,
-            codedWidth: videoTrackInfo.video.width,
-            codedHeight: videoTrackInfo.video.height,
-          };
-        }
+          let codecConfig;
+          if (videoTrackInfo.codec.startsWith('avc1')) {
+            if (!avcC.SPS || !avcC.SPS[0] || !avcC.PPS || !avcC.PPS[0]) {
+              throw new Error('Invalid AVC configuration structure');
+            }
+            const sps = new Uint8Array(Object.values(avcC.SPS[0].nalu));
+            const pps = new Uint8Array(Object.values(avcC.PPS[0].nalu));
+            const avccBox = new Uint8Array([
+              0x01, avcC.AVCProfileIndication, avcC.profile_compatibility, avcC.AVCLevelIndication,
+              0xff, 0xe1, (sps.length >> 8) & 0xff, sps.length & 0xff,
+              ...sps, 0x01, (pps.length >> 8) & 0xff, pps.length & 0xff, ...pps
+            ]);
 
-        addDebug(`Codec config: ${JSON.stringify(codecConfig)}`);
-        const videoDecoder = new VideoDecoder({
-          output: handleFrame,
-          error: (e) => {
-            addDebug(`Decoder error: ${e.message}`);
-            setError(`Decoder error: ${e.message}`);
-          },
-        });
+            codecConfig = {
+              codec: videoTrackInfo.codec,
+              codedWidth: videoTrackInfo.video.width,
+              codedHeight: videoTrackInfo.video.height,
+              description: avccBox
+            };
+          } else {
+            codecConfig = {
+              codec: videoTrackInfo.codec,
+              codedWidth: videoTrackInfo.video.width,
+              codedHeight: videoTrackInfo.video.height,
+            };
+          }
 
-        videoDecoder.configure(codecConfig);
-        decoderRef.current = videoDecoder;
+          addDebug(`Codec config: ${JSON.stringify(codecConfig)}`);
+          const videoDecoder = new VideoDecoder({
+            output: handleFrame,
+            error: (e) => {
+              addDebug(`Decoder error: ${e.message}`);
+              setError(`Decoder error: ${e.message}`);
+            },
+          });
 
-        addDebug('Decoder initialized');
-        
-        mp4boxFile.setExtractionOptions(videoTrackInfo.id, null, { nbSamples: 1 });
-        mp4boxFile.start();
-      } catch (err) {
-        addDebug(`Error in initializeDecoder: ${err.message}`);
-        setError(`Error in initializeDecoder: ${err.message}`);
-      }
-    };
+          videoDecoder.configure(codecConfig);
+          decoderRef.current = videoDecoder;
 
-    const fetchAndProcessVideoFrame = async (frame) => {
-      try {
-        const response = await fetch(url);
-        const reader = response.body.getReader();
+          addDebug('Decoder initialized');
+          
+          mp4boxFile.setExtractionOptions(videoTrackInfo.id);
+          mp4boxFile.start();
+        };
 
         mp4boxFile.onReady = async (info) => {
           setVideoInfo(info);
@@ -158,17 +148,16 @@ const VideoFrameDisplay = ({ frame, canvasRef, decoderRef, videoInfo, setVideoIn
         };
 
         mp4boxFile.onSamples = (track_id, ref, samples) => {
-          if (samples.length > 0) {
-            if (decoderRef.current) {
-              decodeFrame(samples[0]).catch(e => {
-                addDebug(`Decoding error: ${e.message}`);
-                setError(`Decoding error: ${e.message}`);
-              });
-            } else {
-              pendingSamples.push(samples[0]);
+          samples.forEach((sample, index) => {
+            if (sample.is_sync) {
+              keyFramesRef.current.push(samplesRef.current.length + index);
             }
-          }
+          });
+          samplesRef.current = samplesRef.current.concat(samples);
         };
+
+        const response = await fetch(url);
+        const reader = response.body.getReader();
 
         const processChunk = async ({ done, value }) => {
           if (done) {
@@ -183,16 +172,10 @@ const VideoFrameDisplay = ({ frame, canvasRef, decoderRef, videoInfo, setVideoIn
           mp4boxFile.appendBuffer(arrayBuffer);
 
           filePosition += chunk.length;
-          await reader.read().then(processChunk).catch(e => {
-            addDebug(`Error reading video chunk: ${e.message}`);
-            throw new Error(`Error reading video chunk: ${e.message}`);
-          });
+          await reader.read().then(processChunk);
         };
 
-        await reader.read().then(processChunk).catch(e => {
-          addDebug(`Error processing video: ${e.message}`);
-          throw new Error(`Error processing video: ${e.message}`);
-        });
+        await reader.read().then(processChunk);
 
       } catch (err) {
         addDebug(`Error: ${err.message}`);
@@ -200,37 +183,49 @@ const VideoFrameDisplay = ({ frame, canvasRef, decoderRef, videoInfo, setVideoIn
       }
     };
 
-    const decodeFrame = async (sample) => {
-      const chunk = new EncodedVideoChunk({
-        type: sample.is_sync ? 'key' : 'delta',
-        timestamp: sample.cts,
-        duration: sample.duration,
-        data: sample.data
-      });
-
-      await decoderRef.current.decode(chunk);
-    };
-
-    const handleFrame = (frame) => {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
-        frame.close();
-      }
-    };
-
-    fetchAndProcessVideoFrame(frame).catch(e => {
-      addDebug(`Error initializing video: ${e.message}`);
-      setError(`Error initializing video: ${e.message}`);
-    });
+    initializeVideo();
 
     return () => {
       if (decoderRef.current) {
         decoderRef.current.close();
       }
     };
+  }, []);
+
+  useEffect(() => {
+    const decodeFrame = async () => {
+      if (!samplesRef.current[frame] || !decoderRef.current) return;
+
+      // Find the nearest previous key frame
+      const nearestKeyFrame = keyFramesRef.current.reduce((prev, curr) => 
+        (curr <= frame && curr > prev) ? curr : prev
+      , -1);
+
+      // Decode from the nearest key frame to the current frame
+      for (let i = nearestKeyFrame; i <= frame; i++) {
+        const sample = samplesRef.current[i];
+        const chunk = new EncodedVideoChunk({
+          type: sample.is_sync ? 'key' : 'delta',
+          timestamp: sample.cts,
+          duration: sample.duration,
+          data: sample.data
+        });
+
+        await decoderRef.current.decode(chunk);
+      }
+    };
+
+    decodeFrame();
   }, [frame]);
+
+  const handleFrame = (decodedFrame) => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(decodedFrame, 0, 0, canvas.width, canvas.height);
+      decodedFrame.close();
+    }
+  };
 
   return (
     <div className="w-full max-w-xl mx-auto p-4">
@@ -251,16 +246,12 @@ const VideoFrameDisplay = ({ frame, canvasRef, decoderRef, videoInfo, setVideoIn
   );
 };
 
-
 function ControlBar({ frame, onForwardClick, onBackWardClick }) {
-
-  // Display the current frame number
-  return <>
+  return (
     <div className="control">
-      <button className="forward" onClick={ onForwardClick }>Next frame</button>
-      <label>Current frame: { frame }</label>
-      <input type="submit"/>
-      <button className="backward" onClick={ onBackWardClick }>Previous frame</button>
+      <button className="backward" onClick={onBackWardClick}>Previous frame</button>
+      <label>Current frame: {frame}</label>
+      <button className="forward" onClick={onForwardClick}>Next frame</button>
     </div>
-  </> 
+  );
 }
