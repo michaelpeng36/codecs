@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createFile } from 'mp4box';
-import url from './assets/channel-1-display-0 3.mp4';
+import url from './assets/channel-1-display-0.mp4';
 
 export default function VideoPlayer() {
   const displayCounter = useRef(0);
@@ -9,7 +9,7 @@ export default function VideoPlayer() {
   const canvasRef = useRef(null);
   const decoderRef = useRef(null);
   const [error, setError] = useState(null);
-  const [frame, setFrame] = useState(0);
+  const [frameIndex, setFrameIndex] = useState(0);
   const [debug, setDebug] = useState('');
   const [videoInfo, setVideoInfo] = useState(null);
   const mp4boxFileRef = useRef(null);
@@ -17,17 +17,17 @@ export default function VideoPlayer() {
   const keyFramesRef = useRef([]);
 
   function handleVideoForward() {
-    setFrame(frame => frame + 1);
+    setFrameIndex(framIndex => frameIndex + 1);
   }
   function handleVideoBackward() {
-    setFrame(frame => Math.max(0, frame - 1));
+    setFrameIndex(frameIndex => Math.max(0, frameIndex - 1));
   }
 
   return (
     <>
       <div className="display">
         <VideoFrameDisplay
-          frame={frame}
+          frameIndex={frameIndex}
           frameRef={frameRef}
           closedFrameRef={closedFrameRef}
           canvasRef={canvasRef}
@@ -45,13 +45,13 @@ export default function VideoPlayer() {
         />
       </div>
       <div className="control">
-        <ControlBar frame={frame} setFrame={setFrame} onForwardClick={handleVideoForward} onBackwardClick={handleVideoBackward} debug={debug} />
+        <ControlBar frameIndex={frameIndex} onForwardClick={handleVideoForward} onBackwardClick={handleVideoBackward} debug={debug} />
       </div>
     </>
   );
 }
 
-const VideoFrameDisplay = ({ frame, frameRef, closedFrameRef, canvasRef, decoderRef,displayCounter, videoInfo, setVideoInfo, error, setError, setDebug, mp4boxFileRef, samplesRef, keyFramesRef }) => {
+const VideoFrameDisplay = ({ frameIndex, frameRef, closedFrameRef, canvasRef, decoderRef,displayCounter, videoInfo, setVideoInfo, error, setError, setDebug, mp4boxFileRef, samplesRef, keyFramesRef }) => {
   const addDebug = (message) => {
     setDebug(prev => prev + '\n' + message);
   };
@@ -201,15 +201,15 @@ const VideoFrameDisplay = ({ frame, frameRef, closedFrameRef, canvasRef, decoder
 
   useEffect(() => {
     const decodeFrame = async () => {
-      if (!samplesRef.current[frame] || !decoderRef.current) return;
+      if (!samplesRef.current[frameIndex] || !decoderRef.current) return;
 
       // Find the nearest previous key frame
-      const nearestKeyFrame = keyFramesRef.current.reduce((prev, curr) => 
-        (curr <= frame && curr > prev) ? curr : prev
+      const nearestKeyFrameIndex = keyFramesRef.current.reduce((prev, curr) => 
+        (curr <= frameIndex && curr > prev) ? curr : prev
       , -1);
 
       // Decode from the nearest key frame to the current frame
-      for (let i = nearestKeyFrame; i <= frame; i++) {
+      for (let i = nearestKeyFrameIndex; i <= frameIndex; i++) {
         const sample = samplesRef.current[i];
         const chunk = new EncodedVideoChunk({
           type: sample.is_sync ? 'key' : 'delta',
@@ -225,7 +225,7 @@ const VideoFrameDisplay = ({ frame, frameRef, closedFrameRef, canvasRef, decoder
     };
 
     decodeFrame();
-  }, [frame]);
+  }, [frameIndex]);
 
   const handleFrame = (decodedFrame) => {
     // Close the previous frame if it exists
@@ -271,11 +271,11 @@ const VideoFrameDisplay = ({ frame, frameRef, closedFrameRef, canvasRef, decoder
   );
 };
 
-function ControlBar({ frame, onForwardClick, onBackwardClick, debug  }) {
+function ControlBar({ frameIndex, onForwardClick, onBackwardClick, debug  }) {
   return (
     <div className="control">
       <button className="backward" onClick={onBackwardClick}>Previous frame</button>
-      <label>Current frame: {frame}</label>
+      <label>Current frame: {frameIndex}</label>
       <button className="forward" onClick={onForwardClick}>Next frame</button>
       <pre className="mt-4 p-2 bg-gray-100 rounded overflow-auto max-h-40">{debug}</pre>
     </div>
