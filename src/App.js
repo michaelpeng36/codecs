@@ -4,6 +4,7 @@ import url from './assets/channel-1-display-0.mp4';
 
 export default function VideoPlayer() {
   const displayCounter = useRef(0);
+  const framesRef = useRef([]);
   const frameRef = useRef(null);
   const closedFrameRef = useRef(true);
   const canvasRef = useRef(null);
@@ -30,6 +31,7 @@ export default function VideoPlayer() {
       <div className="display">
         <VideoFrameDisplay
           frameIndex={frameIndex}
+          framesRef={framesRef}
           frameRef={frameRef}
           closedFrameRef={closedFrameRef}
           canvasRef={canvasRef}
@@ -57,6 +59,7 @@ export default function VideoPlayer() {
 
 const VideoFrameDisplay = ({
   frameIndex,
+  framesRef,
   frameRef,
   closedFrameRef,
   canvasRef,
@@ -72,6 +75,7 @@ const VideoFrameDisplay = ({
   mp4boxFileRef,
   samplesRef,
   keyFramesRef }) => {
+
   const addDebug = (message) => {
     setDebug(prev => prev + '\n' + message);
   };
@@ -228,16 +232,27 @@ const VideoFrameDisplay = ({
       if (!isInitialized || !samplesRef.current[frameIndex] || !decoderRef.current) return;
 
       // Find the nearest previous key frame
-      const nearestKeyFrameIndex = keyFramesRef.current.reduce((prev, curr) => 
+      const lowerKeyFrameIndex = keyFramesRef.current.reduce((prev, curr) => 
         (curr <= frameIndex && curr > prev) ? curr : prev
       , -1);
 
+      const upperKeyFrameIndex = keyFramesRef.current.reduce((prev, curr) =>
+        (curr >= frameIndex && curr < prev) ? curr : prev
+      , Number.MAX_SAFE_INTEGER);
+
       addDebug(keyFramesRef.current);
-      addDebug(`Key frame index: ${nearestKeyFrameIndex}`);
+      addDebug(`Lower key frame index: ${lowerKeyFrameIndex}`);
+      addDebug(`Upper key frame index: ${upperKeyFrameIndex}`);
       addDebug(`Samples: ${JSON.stringify(samplesRef.current.map(s => s.cts) )}`)
 
+      // Reset frames reference
+      framesRef.current.forEach((frame, index) => {
+        frame.close();
+      });
+      framesRef.current = [];
+
       // Decode from the nearest key frame to the current frame
-      for (let i = nearestKeyFrameIndex; i <= frameIndex; i++) {
+      for (let i = lowerKeyFrameIndex; i <= upperKeyFrameIndex; i++) {
         const sample = samplesRef.current[i];
         const chunk = new EncodedVideoChunk({
           type: sample.is_sync ? 'key' : 'delta',
@@ -249,33 +264,33 @@ const VideoFrameDisplay = ({
         await decoderRef.current.decode(chunk);
       }
       await decoderRef.current.flush();
-      displayFrameRef();
+    
+      displayFrameRef(lowerKeyFrameIndex, upperKeyFrameIndex);
     };
 
     decodeFrame();
   }, [frameIndex, isInitialized]);
 
   const handleFrame = (decodedFrame) => {
-    // Close the previous frame if it exists
-    if (!closedFrameRef.current) {
-      frameRef.current.close();
-      closedFrameRef.current = true;
-    }
-    frameRef.current = decodedFrame;
-    closedFrameRef.current = false;
+    framesRef.current.push(decodedFrame);
   };
 
-  const displayFrameRef = () => {
+  const displayFrameRef = (lowerKeyFrameIndex, upperKeyFrameIndex) => {
     const canvas = canvasRef.current;
     displayCounter.current += 1;
+    // addDebug(`lowerIndex: ${lowerKeyFrameIndex}, upperIndex: ${upperKeyFrameIndex}`);
     addDebug(`Number of times displayed ${displayCounter.current}`);
+    // Sort inter key-frame buffers by the display time (CTS)
+    framesRef.current.sort((f1, f2) => {
+      if (f1.timestamp > f2.timestamp) {
+        return 1;
+      }
+      return -1;
+    })
+    const frameToDisplay = framesRef.current[frameIndex - lowerKeyFrameIndex];
     if (canvas) {
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(frameRef.current, 0, 0, canvas.width, canvas.height);
-      if (!closedFrameRef) {
-        frameRef.current.close();
-        closedFrameRef.current = true;
-      }
+      ctx.drawImage(frameToDisplay, 0, 0, canvas.width, canvas.height);
     }
   }
 
