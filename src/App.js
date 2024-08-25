@@ -8,13 +8,15 @@ export default function VideoPlayer() {
   const closedFrameRef = useRef(true);
   const canvasRef = useRef(null);
   const decoderRef = useRef(null);
+  const mp4boxFileRef = useRef(null);
+  const samplesRef = useRef([]);
+  const keyFramesRef = useRef([]);
+
   const [error, setError] = useState(null);
   const [frameIndex, setFrameIndex] = useState(0);
   const [debug, setDebug] = useState('');
   const [videoInfo, setVideoInfo] = useState(null);
-  const mp4boxFileRef = useRef(null);
-  const samplesRef = useRef([]);
-  const keyFramesRef = useRef([]);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   function handleVideoForward() {
     setFrameIndex(framIndex => frameIndex + 1);
@@ -33,10 +35,12 @@ export default function VideoPlayer() {
           canvasRef={canvasRef}
           decoderRef={decoderRef}
           displayCounter={displayCounter}
+          isInitialized={isInitialized}
           videoInfo={videoInfo}
           setVideoInfo={setVideoInfo}
           error={error}
           setError={setError}
+          setIsInitialized={setIsInitialized}
           debug={debug}
           setDebug={setDebug}
           mp4boxFileRef={mp4boxFileRef}
@@ -51,7 +55,23 @@ export default function VideoPlayer() {
   );
 }
 
-const VideoFrameDisplay = ({ frameIndex, frameRef, closedFrameRef, canvasRef, decoderRef,displayCounter, videoInfo, setVideoInfo, error, setError, setDebug, mp4boxFileRef, samplesRef, keyFramesRef }) => {
+const VideoFrameDisplay = ({
+  frameIndex,
+  frameRef,
+  closedFrameRef,
+  canvasRef,
+  decoderRef,
+  displayCounter,
+  isInitialized,
+  videoInfo,
+  setVideoInfo,
+  error,
+  setError,
+  setDebug,
+  setIsInitialized,
+  mp4boxFileRef,
+  samplesRef,
+  keyFramesRef }) => {
   const addDebug = (message) => {
     setDebug(prev => prev + '\n' + message);
   };
@@ -137,7 +157,8 @@ const VideoFrameDisplay = ({ frameIndex, frameRef, closedFrameRef, canvasRef, de
 
           addDebug('Decoder initialized');
           
-          mp4boxFile.setExtractionOptions(videoTrackInfo.id);
+          // Process one sample at a time
+          mp4boxFile.setExtractionOptions(videoTrackInfo.id, null, { nbSamples: 1 });
           mp4boxFile.start();
         };
 
@@ -153,6 +174,8 @@ const VideoFrameDisplay = ({ frameIndex, frameRef, closedFrameRef, canvasRef, de
           throw new Error(`MP4Box error: ${e}`);
         };
 
+        // Samples are not necesarily decoded in presentation order, depending on the compression
+        // format. Sorting them according to CTS (presentation timestamp) is needed before decoding/display
         mp4boxFile.onSamples = (track_id, ref, samples) => {
           samples.forEach((sample, index) => {
             if (sample.is_sync) {
@@ -168,6 +191,7 @@ const VideoFrameDisplay = ({ frameIndex, frameRef, closedFrameRef, canvasRef, de
         const processChunk = async ({ done, value }) => {
           if (done) {
             mp4boxFile.flush();
+            setIsInitialized(true);
             return;
           }
 
@@ -201,12 +225,16 @@ const VideoFrameDisplay = ({ frameIndex, frameRef, closedFrameRef, canvasRef, de
 
   useEffect(() => {
     const decodeFrame = async () => {
-      if (!samplesRef.current[frameIndex] || !decoderRef.current) return;
+      if (!isInitialized || !samplesRef.current[frameIndex] || !decoderRef.current) return;
 
       // Find the nearest previous key frame
       const nearestKeyFrameIndex = keyFramesRef.current.reduce((prev, curr) => 
         (curr <= frameIndex && curr > prev) ? curr : prev
       , -1);
+
+      addDebug(keyFramesRef.current);
+      addDebug(`Key frame index: ${nearestKeyFrameIndex}`);
+      addDebug(`Samples: ${JSON.stringify(samplesRef.current.map(s => s.cts) )}`)
 
       // Decode from the nearest key frame to the current frame
       for (let i = nearestKeyFrameIndex; i <= frameIndex; i++) {
@@ -217,7 +245,7 @@ const VideoFrameDisplay = ({ frameIndex, frameRef, closedFrameRef, canvasRef, de
           duration: sample.duration,
           data: sample.data
         });
-
+        addDebug(`Frame index: ${i}, timestamp: ${sample.cts}`);
         await decoderRef.current.decode(chunk);
       }
       await decoderRef.current.flush();
@@ -225,7 +253,7 @@ const VideoFrameDisplay = ({ frameIndex, frameRef, closedFrameRef, canvasRef, de
     };
 
     decodeFrame();
-  }, [frameIndex]);
+  }, [frameIndex, isInitialized]);
 
   const handleFrame = (decodedFrame) => {
     // Close the previous frame if it exists
@@ -234,14 +262,13 @@ const VideoFrameDisplay = ({ frameIndex, frameRef, closedFrameRef, canvasRef, de
       closedFrameRef.current = true;
     }
     frameRef.current = decodedFrame;
-    // addDebug(`frameRef.current is of type ${typeof(decodedFrame)}`);
     closedFrameRef.current = false;
   };
 
   const displayFrameRef = () => {
     const canvas = canvasRef.current;
     displayCounter.current += 1;
-    addDebug(`Displaying frame ${displayCounter.current}`);
+    addDebug(`Number of times displayed ${displayCounter.current}`);
     if (canvas) {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(frameRef.current, 0, 0, canvas.width, canvas.height);
