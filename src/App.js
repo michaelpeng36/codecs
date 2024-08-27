@@ -7,8 +7,6 @@ const MAX_SAMPLES_IN_MEMORY = 10;
 export default function VideoPlayer() {
   const [frameIndex, setFrameIndex] = useState(0);
   const [debug, setDebug] = useState('');
-  const ps = useRef(null);
-  const pe = useRef(null)
 
   function handleVideoForward() {
     // ps.current = performance.now();
@@ -22,7 +20,7 @@ export default function VideoPlayer() {
   return (
     <>
       <div className="display">
-        <VideoFrameDisplay frameIndex={frameIndex} setDebug={setDebug} ps={ps} pe={pe} />
+        <VideoFrameDisplay frameIndex={frameIndex} setDebug={setDebug} />
       </div>
       <div className="control">
         <ControlBar frameIndex={frameIndex} setFrameIndex={setFrameIndex} onForwardClick={handleVideoForward} onBackwardClick={handleVideoBackward} debug={debug} />
@@ -31,7 +29,7 @@ export default function VideoPlayer() {
   );
 }
 
-const VideoFrameDisplay = ({ frameIndex, setDebug, ps, pe }) => {
+const VideoFrameDisplay = ({ frameIndex, setDebug }) => {
   const sampleBufferRef = useRef([]);
   const sampleBufferIndexRef = useRef(0);
   const videoTrackIdRef = useRef(0);
@@ -41,6 +39,8 @@ const VideoFrameDisplay = ({ frameIndex, setDebug, ps, pe }) => {
   const [videoInfo, setVideoInfo] = useState(null);
   const mp4boxFileRef = useRef(null);
   const [initialized, setInitialized] = useState(false);
+  const startRef = useRef(null);
+  const endRef = useRef(null);
 
   const addDebug = (message) => {
     setDebug(prev => prev + '\n' + message);
@@ -215,7 +215,7 @@ const VideoFrameDisplay = ({ frameIndex, setDebug, ps, pe }) => {
       const sampleBuffer = sampleBufferRef.current;
       const sampleBufferIndex = sampleBufferIndexRef.current;
       addDebug(`Fetching sample from the sample buffer, which is of length ${sampleBufferRef.current.length}`);
-      ps.current = performance.now();
+      startRef.current = performance.now();
       const sample = sampleBuffer[sampleBufferIndex];
       addDebug(`Sample: ${JSON.stringify(sample)}`)
       const chunk = new EncodedVideoChunk({
@@ -229,13 +229,13 @@ const VideoFrameDisplay = ({ frameIndex, setDebug, ps, pe }) => {
 
       sampleBufferIndexRef.current += 1;
     };
-    decodeAndDisplayFrame().then(() => {pe.current = performance.now()});
+    decodeAndDisplayFrame().then(() => {endRef.current = performance.now()});
   }, [initialized, frameIndex]);
 
   return (
     <div className="w-full max-w-xl mx-auto p-4">
       <h2 className="text-xl font-bold mb-4">Video Frame Display</h2>
-      <h3>Time to perform: { pe.current - ps.current }</h3>
+      <h3>Time to perform: { endRef.current - startRef.current }</h3>
       {error ? (
         <p className="text-red-500">{error}</p>
       ) : (videoInfo ? (
