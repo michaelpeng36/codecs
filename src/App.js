@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createFile } from 'mp4box';
 import src from './assets/channel-1-display-0.mp4';
-import FrameExtractor from './lib/FrameExtractor';
+import VideoFrameExtractor from './lib/models/extractor';
 
 export default function VideoPlayer() {
   const [timestamp, setTimestamp] = useState(null);
@@ -12,13 +12,13 @@ export default function VideoPlayer() {
     if (timestamp === null) {
       setTimestamp(1/FPS);
     } else {
-      setTimestamp(timestamp + 1/FPS);
+      setTimestamp(timestamp + 100/FPS);
     }
   }
 
   function handleVideoJump() {
     const FPS = 60;
-    setTimestamp(timestamp + 20/FPS);
+    setTimestamp(timestamp + 2000/FPS);
   }
 
   return (
@@ -37,7 +37,8 @@ const VideoFrameDisplay = ({ timestamp, setDebug }) => {
   const canvasRef = useRef(null);
   const [error, setError] = useState(null);
   const [initialized, setInitialized] = useState(false);
-  const frameExtractorRef = useRef(null);
+  const videoInfoRef = useRef(null);
+  const videoFrameStreamRef = useRef(null);
 
   const addDebug = (message) => {
     setDebug(prev => prev + '\n' + message);
@@ -45,52 +46,51 @@ const VideoFrameDisplay = ({ timestamp, setDebug }) => {
 
   const displayVideoFrame = (decodedFrame) => {
     const canvas = canvasRef.current;
-    if (canvas) {
+    if (canvas && decodedFrame) {
+      // throw new Error(`Video frame: ${JSON.stringify(decodedFrame)}`)
       addDebug(`Seeked timestamp: ${timestamp}, frame timestamp: ${decodedFrame.timestamp}`)
       const ctx = canvas.getContext('2d');
       ctx.drawImage(decodedFrame, 0, 0, canvas.width, canvas.height)
     }
+    decodedFrame.close();
   };
 
   useEffect(() => {
     const setup = async () => {
-      addDebug("Setting up frame extractor...");
-      const frameExtractor = new FrameExtractor(src, displayVideoFrame);
-      frameExtractorRef.current = frameExtractor;
-      await frameExtractor.initialize().catch(e => {
-        addDebug(e.message);
-        setError(e.message);
-      });
+      addDebug("Setting up video frame stream...");
+      const videoFrameStream = new VideoFrameExtractor(src, displayVideoFrame, 5);
+      videoFrameStreamRef.current = videoFrameStream;
+      videoFrameStream.start()
+      videoInfoRef.current = videoFrameStream.info;
       setInitialized(true);
-      addDebug("Successfully set up the frame extractor!");
+      addDebug("Successfully set up the video frame stream!");
     }
     setup();
-    return () => { frameExtractorRef.current.close() }
+    return () => { videoFrameStreamRef.current.close() }
   }, []);
 
   useEffect(() => {
-    if (!initialized || !frameExtractorRef.current) {
+    if (!initialized || !videoFrameStreamRef.current) {
       return;
     }
-    frameExtractorRef.current.seek(timestamp);
+    videoFrameStreamRef.current.next();
   }, [initialized, timestamp]);
 
   return (
     <div className="w-full max-w-xl mx-auto p-4">
       <h2 className="text-xl font-bold mb-4">Video Frame Display</h2>
-      {/* <h3>Time to perform: { endRef.current - startRef.current }</h3> */}
+      {/* <h3>Time to perform: { videoFrameStreamRef.current.end - videoFrameStreamRef.current.start }</h3> */}
       {error ? (
         <p className="text-red-500">{error}</p>
       ) : 
         <canvas ref={canvasRef} width="1920" height="1080" className="border border-gray-300" />
-        // Should never reach the below line
       }
-      {/* {videoInfo && (
+      {videoInfoRef.current && (
         <p className="mt-2">
-          Video info: {videoInfo.tracks[0].video.width}x{videoInfo.tracks[0].video.height}, 
-          Codec: {videoInfo.tracks[0].codec}
+          Video info: {videoInfoRef.current.video.width}x{videoInfoRef.current.video.height}, 
+          Codec: {videoInfoRef.current.codec}
         </p>
-      )} */}
+      )}
     </div>
   );
 };
@@ -98,7 +98,7 @@ const VideoFrameDisplay = ({ timestamp, setDebug }) => {
 function ControlBar({ timestamp, onForwardClick, onJumpClick, debug }) {
   return (
     <div className="control">
-      <label>Current timestamp: {timestamp}</label>
+      <p>Current timestamp: {timestamp}</p>
       <button className="forward" onClick={onForwardClick}>Next frame</button>
       <button className="jump" onClick={onJumpClick}>Jump!</button>
       <pre className="mt-4 p-2 bg-gray-100 rounded overflow-auto max-h-40">{debug}</pre>
