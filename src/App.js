@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createFile } from 'mp4box';
 import src from './assets/channel-1-display-0.mp4';
 import VideoFrameExtractor from './lib/models/extractor';
+import HTMLVideoFrameDisplay from './displays/HTMLVideoFrameDisplay';
 // import VideoFrameDisplay from './lib/oldFrame';
 
 export default function VideoPlayer() {
@@ -28,6 +29,7 @@ export default function VideoPlayer() {
     <>
       <div className="display">
         <VideoFrameDisplay src={src} timestamp={timestamp} frameIndex={frameIndex} setDebug={setDebug} />
+        <HTMLVideoFrameDisplay url={src} frameIndex={frameIndex} setDebug={setDebug} />
       </div>
       <div className="control">
         <ControlBar frameIndex={frameIndex} timestamp={timestamp} onForwardClick={handleVideoForward} onJumpClick={handleVideoJump} debug={debug} />
