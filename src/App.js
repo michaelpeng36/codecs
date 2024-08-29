@@ -10,17 +10,17 @@ export default function VideoPlayer() {
   const [debug, setDebug] = useState('');
 
   function handleVideoForward() {
-    const FPS = 60;
+    const interval = 1/60;
     if (timestamp === null) {
-      setTimestamp(1/FPS);
+      setTimestamp(interval);
     } else {
-      setTimestamp(timestamp + 1/FPS);
+      setTimestamp(timestamp + interval);
     }
   }
 
   function handleVideoJump() {
-    const FPS = 60;
-    setTimestamp(timestamp + 10/FPS);
+    const interval = 1/60;
+    setTimestamp(timestamp + 10 * interval);
   }
 
   return (
@@ -104,7 +104,7 @@ function ControlBar({ timestamp, onForwardClick, onJumpClick, debug }) {
   return (
     <div className="control">
       <p>Current: {timestamp}</p>
-      <button className="forward" onClick={onForwardClick}>Next frame</button>
+      <button className="forward" onClick={onForwardClick}>Next time</button>
       <button className="jump" onClick={onJumpClick}>Jump!</button>
       <pre className="mt-4 p-2 bg-gray-100 rounded overflow-auto max-h-40">{debug}</pre>
     </div>
