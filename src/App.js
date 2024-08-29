@@ -9,12 +9,6 @@ export default function VideoPlayer() {
   const [timestamp, setTimestamp] = useState(null);
   const [debug, setDebug] = useState('');
 
-  const [error, setError] = useState(null);
-  const [frameIndex, setFrameIndex] = useState(0);
-  const [debug, setDebug] = useState('');
-  const [videoInfo, setVideoInfo] = useState(null);
-  const [isInitialized, setIsInitialized] = useState(false);
-
   function handleVideoForward() {
     const interval = 1/60;
     if (timestamp === null) {
