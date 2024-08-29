@@ -1,7 +1,7 @@
 node_modules
 
 # Assets
-src/assets/*
+# src/assets/*
 
 # MacOS artifacts
 .DS_Store
