@@ -31,6 +31,9 @@ class VideoFrameExtractor {
   #timestampWatermark
   #demuxer;
   #decoder;
+  #ready;
+  st;
+  et;
 
   constructor(src, handleVideoFrame, maxPendingChunks) {
       this.#src = src;
@@ -38,15 +41,18 @@ class VideoFrameExtractor {
       this.#pendingFrames = [];
       this.handleVideoFrame = handleVideoFrame;
       this.#timestampWatermark = 0;
+      this.#ready = this.start();
+      this.st = 0;
+      this.et = 0;
   }
 
   seek(timestamp) {
-    if (timestamp === null) return;
+    // throw new Error(`videoInfo: ${JSON.stringify(this.videoInfo)}`)
+    // const mappedTimestamp = timestamp * this.videoInfo.timescale;
+    if (timestamp === null || timestamp < 0 || timestamp > this.videoInfo.duration) return;
     // Fast forward pending frames until we reach one where the frame is close to what we want
     while (timestamp > this.#timestampWatermark) {
-      if (this.#pendingFrames.length === 0) {
-        continue;
-      }
+      this.#pendingFrames.forEach()
       // Close all pending frames and reset the pending frames array
       const frame = this.#pendingFrames.shift();
       frame.close();
@@ -73,13 +79,13 @@ class VideoFrameExtractor {
     return;
   }
 
-  start() {
+  async start() {
     this.#initializeDemuxer();
 
-    fetch(this.#src).then(response => {
+    return fetch(this.#src).then(response => {
       const sink = new VideoSink(this.#demuxer);
       const chunkStream = new WritableStream(sink, { highWaterMark: this.#maxPendingChunks });
-      response.body.pipeTo(chunkStream, { highWaterMark: this.#maxPendingChunks });
+      return response.body.pipeTo(chunkStream, { highWaterMark: this.#maxPendingChunks });
     })
   };
 

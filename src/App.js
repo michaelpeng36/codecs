@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { createFile } from 'mp4box';
 import src from './assets/channel-1-display-0.mp4';
 import VideoFrameExtractor from './lib/models/extractor';
+// import VideoFrameDisplay from './lib/oldFrame';
 
 export default function VideoPlayer() {
+  const [frameIndex, setFrameIndex] = useState(0);
   const [timestamp, setTimestamp] = useState(null);
   const [debug, setDebug] = useState('');
 
@@ -14,6 +16,7 @@ export default function VideoPlayer() {
     } else {
       setTimestamp(timestamp + 100/FPS);
     }
+    setFrameIndex(frameIndex + 1);
   }
 
   function handleVideoJump() {
@@ -24,10 +27,10 @@ export default function VideoPlayer() {
   return (
     <>
       <div className="display">
-        <VideoFrameDisplay timestamp={timestamp} setDebug={setDebug} />
+        <VideoFrameDisplay src={src} timestamp={timestamp} frameIndex={frameIndex} setDebug={setDebug} />
       </div>
       <div className="control">
-        <ControlBar timestamp={timestamp} onForwardClick={handleVideoForward} onJumpClick={handleVideoJump} debug={debug} />
+        <ControlBar frameIndex={frameIndex} timestamp={timestamp} onForwardClick={handleVideoForward} onJumpClick={handleVideoJump} debug={debug} />
       </div>
     </>
   );
@@ -39,6 +42,7 @@ const VideoFrameDisplay = ({ timestamp, setDebug }) => {
   const [initialized, setInitialized] = useState(false);
   const videoInfoRef = useRef(null);
   const videoFrameStreamRef = useRef(null);
+  const perfRef = useRef(null);
 
   const addDebug = (message) => {
     setDebug(prev => prev + '\n' + message);
@@ -60,12 +64,11 @@ const VideoFrameDisplay = ({ timestamp, setDebug }) => {
       addDebug("Setting up video frame stream...");
       const videoFrameStream = new VideoFrameExtractor(src, displayVideoFrame, 5);
       videoFrameStreamRef.current = videoFrameStream;
-      videoFrameStream.start()
+      await videoFrameStreamRef.current.start()
       videoInfoRef.current = videoFrameStream.info;
-      setInitialized(true);
       addDebug("Successfully set up the video frame stream!");
     }
-    setup();
+    setup().then(() => setInitialized(true));
     return () => { videoFrameStreamRef.current.close() }
   }, []);
 
@@ -74,12 +77,14 @@ const VideoFrameDisplay = ({ timestamp, setDebug }) => {
       return;
     }
     videoFrameStreamRef.current.next();
+    // videoFrameStreamRef.current.seek(timestamp);
+    perfRef.current = videoFrameStreamRef.current.et - videoFrameStreamRef.current.st;
   }, [initialized, timestamp]);
 
   return (
     <div className="w-full max-w-xl mx-auto p-4">
       <h2 className="text-xl font-bold mb-4">Video Frame Display</h2>
-      {/* <h3>Time to perform: { videoFrameStreamRef.current.end - videoFrameStreamRef.current.start }</h3> */}
+      <h3>Time to perform: { perfRef.current ? perfRef.current : 0 }</h3>
       {error ? (
         <p className="text-red-500">{error}</p>
       ) : 
@@ -95,10 +100,10 @@ const VideoFrameDisplay = ({ timestamp, setDebug }) => {
   );
 };
 
-function ControlBar({ timestamp, onForwardClick, onJumpClick, debug }) {
+function ControlBar({ frameIndex, timestamp, onForwardClick, onJumpClick, debug }) {
   return (
     <div className="control">
-      <p>Current timestamp: {timestamp}</p>
+      <p>Current: {timestamp}</p>
       <button className="forward" onClick={onForwardClick}>Next frame</button>
       <button className="jump" onClick={onJumpClick}>Jump!</button>
       <pre className="mt-4 p-2 bg-gray-100 rounded overflow-auto max-h-40">{debug}</pre>
