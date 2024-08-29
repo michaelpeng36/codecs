@@ -9,7 +9,7 @@ const HTMLVideoFrameDisplay = ({
     const videoRef = useRef(null);
 
     useEffect(() => {
-      if (!isInitialized) return;
+      // if (!isInitialized) return;
       try {
         if (videoRef.current) {
           setDebug(`Attempting to set the current time of videoRef to ${timestamp}`);

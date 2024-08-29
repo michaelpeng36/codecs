@@ -6,7 +6,6 @@ import HTMLVideoFrameDisplay from './displays/HTMLVideoFrameDisplay';
 // import VideoFrameDisplay from './lib/oldFrame';
 
 export default function VideoPlayer() {
-  const [frameIndex, setFrameIndex] = useState(0);
   const [timestamp, setTimestamp] = useState(null);
   const [debug, setDebug] = useState('');
 
@@ -15,24 +14,23 @@ export default function VideoPlayer() {
     if (timestamp === null) {
       setTimestamp(1/FPS);
     } else {
-      setTimestamp(timestamp + 100/FPS);
+      setTimestamp(timestamp + 1/FPS);
     }
-    setFrameIndex(frameIndex + 1);
   }
 
   function handleVideoJump() {
     const FPS = 60;
-    setTimestamp(timestamp + 2000/FPS);
+    setTimestamp(timestamp + 10/FPS);
   }
 
   return (
     <>
       <div className="display">
-        <VideoFrameDisplay src={src} timestamp={timestamp} frameIndex={frameIndex} setDebug={setDebug} />
+        <VideoFrameDisplay src={src} timestamp={timestamp} setDebug={setDebug} />
         <HTMLVideoFrameDisplay url={src} timestamp={timestamp} setDebug={setDebug} />
       </div>
       <div className="control">
-        <ControlBar frameIndex={frameIndex} timestamp={timestamp} onForwardClick={handleVideoForward} onJumpClick={handleVideoJump} debug={debug} />
+        <ControlBar timestamp={timestamp} onForwardClick={handleVideoForward} onJumpClick={handleVideoJump} debug={debug} />
       </div>
     </>
   );
@@ -102,7 +100,7 @@ const VideoFrameDisplay = ({ timestamp, setDebug }) => {
   );
 };
 
-function ControlBar({ frameIndex, timestamp, onForwardClick, onJumpClick, debug }) {
+function ControlBar({ timestamp, onForwardClick, onJumpClick, debug }) {
   return (
     <div className="control">
       <p>Current: {timestamp}</p>
