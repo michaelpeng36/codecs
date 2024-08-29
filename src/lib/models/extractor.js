@@ -25,7 +25,7 @@ class VideoSink {
 class VideoFrameExtractor {
   #src;
   videoInfo;
-  handleVideoFrame;
+  #handleVideoFrame;
   #pendingFrames;
   #maxPendingChunks;
   #timestampWatermark
@@ -39,7 +39,7 @@ class VideoFrameExtractor {
       this.#src = src;
       this.#maxPendingChunks = maxPendingChunks;
       this.#pendingFrames = [];
-      this.handleVideoFrame = handleVideoFrame;
+      this.#handleVideoFrame = handleVideoFrame;
       this.#timestampWatermark = 0;
       this.#ready = this.start();
       this.st = 0;
@@ -50,6 +50,7 @@ class VideoFrameExtractor {
     // throw new Error(`videoInfo: ${JSON.stringify(this.videoInfo)}`)
     // const mappedTimestamp = timestamp * this.videoInfo.timescale;
     if (timestamp === null || timestamp < 0 || timestamp > this.videoInfo.duration) return;
+    this.st = performance.now();
     // Fast forward pending frames until we reach one where the frame is close to what we want
     while (timestamp > this.#timestampWatermark) {
       this.#pendingFrames.forEach()
@@ -181,9 +182,10 @@ class VideoFrameExtractor {
     }
 
     const handleVideoFrame = (decodedFrame) => {
-      this.#pendingFrames.push(decodedFrame);
+      this.#handleVideoFrame(decodedFrame);
+      this.et = performance.now();
     }
-
+    
     const decoder = new VideoDecoder({
       output: handleVideoFrame,
       error: (e) => { 
@@ -199,7 +201,7 @@ class VideoFrameExtractor {
   next() {
     const frame = this.#pendingFrames.shift();
     if (frame) {
-      this.handleVideoFrame(frame);
+      this.#handleVideoFrame(frame);
       frame.close();
     }
   }

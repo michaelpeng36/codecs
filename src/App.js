@@ -76,8 +76,8 @@ const VideoFrameDisplay = ({ timestamp, setDebug }) => {
     if (!initialized || !videoFrameStreamRef.current) {
       return;
     }
-    videoFrameStreamRef.current.next();
-    // videoFrameStreamRef.current.seek(timestamp);
+    // videoFrameStreamRef.current.next();
+    videoFrameStreamRef.current.seek(timestamp);
     perfRef.current = videoFrameStreamRef.current.et - videoFrameStreamRef.current.st;
   }, [initialized, timestamp]);
 
