@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 const HTMLVideoFrameDisplay = ({
     url,
-    frameIndex,
+    timestamp,
     isInitialized,
     setDebug }) => {
     const [htmlError, setHtmlError] = useState('');
@@ -12,14 +12,14 @@ const HTMLVideoFrameDisplay = ({
       if (!isInitialized) return;
       try {
         if (videoRef.current) {
-          setDebug(`Attempting to set the current time of videoRef to ${frameIndex / 60}`);
-          videoRef.current.currentTime = frameIndex / 60; // Assuming 60 fps
+          setDebug(`Attempting to set the current time of videoRef to ${timestamp}`);
+          videoRef.current.currentTime = timestamp; // Assuming 60 fps
         }
       }
       catch (e) {
         setHtmlError(`HTML video error: ${e.message}`);
       }
-    }, [frameIndex]);
+    }, [timestamp]);
 
     return <>
     <div className="flex flex-col items-center">

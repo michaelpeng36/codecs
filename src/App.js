@@ -29,7 +29,7 @@ export default function VideoPlayer() {
     <>
       <div className="display">
         <VideoFrameDisplay src={src} timestamp={timestamp} frameIndex={frameIndex} setDebug={setDebug} />
-        <HTMLVideoFrameDisplay url={src} frameIndex={frameIndex} setDebug={setDebug} />
+        <HTMLVideoFrameDisplay url={src} timestamp={timestamp} setDebug={setDebug} />
       </div>
       <div className="control">
         <ControlBar frameIndex={frameIndex} timestamp={timestamp} onForwardClick={handleVideoForward} onJumpClick={handleVideoJump} debug={debug} />
